@@ -92,6 +92,24 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
+    // Consumer for notification events
+    const notificationQueue = 'audit-notification-events';
+    await this.channel.assertQueue(notificationQueue, { durable: true });
+    await this.channel.bindQueue(notificationQueue, 'notification-events', 'verification.email.sent');
+
+    await this.channel.consume(notificationQueue, async (message: any) => {
+      if (message) {
+        try {
+          const event = JSON.parse(message.content.toString());
+          await this.handleVerificationEmailSentEvent(event);
+          this.channel?.ack(message);
+        } catch (error) {
+          console.error('Error processing notification event:', error);
+          this.channel?.nack(message, false, false); // Don't requeue on error
+        }
+      }
+    });
+
     console.log('Event consumers setup completed');
   }
 
@@ -154,6 +172,36 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
       console.log('User creation audit log created successfully');
     } catch (error) {
       console.error('Failed to create user creation audit log:', error);
+    }
+  }
+
+  private async handleVerificationEmailSentEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing verification.email.sent event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId || null,
+        actionName: 'verification.email.sent',
+        entityType: 'email_verification',
+        entityId: event.data.userId || event.data.tenantId,
+        ipAddress: '127.0.0.1', // Default for system events
+        userAgent: 'System',
+        requestData: {
+          email: event.data.email,
+          verificationToken: event.data.verificationToken,
+          expiresAt: event.data.expiresAt,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          success: true,
+        },
+      });
+
+      console.log('Email verification audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create email verification audit log:', error);
     }
   }
 
