@@ -41,23 +41,6 @@ export class InitialMigration1704067200000 implements MigrationInterface {
     await queryRunner.query(`CREATE INDEX "IDX_audit_logs_action_type_id" ON "audit_logs" ("action_type_id")`);
     await queryRunner.query(`CREATE INDEX "IDX_audit_logs_entity_type" ON "audit_logs" ("entity_type")`);
     await queryRunner.query(`CREATE INDEX "IDX_audit_logs_created_at" ON "audit_logs" ("created_at")`);
-
-    // Insert default audit action types
-    await queryRunner.query(`
-      INSERT INTO "audit_action_types" ("action_type_id", "action_name", "description") VALUES 
-      (uuid_generate_v4(), 'TENANT_REGISTERED', 'Hospital tenant registration'),
-      (uuid_generate_v4(), 'USER_CREATED', 'User account creation'),
-      (uuid_generate_v4(), 'EMAIL_VERIFICATION_SENT', 'Email verification sent'),
-      (uuid_generate_v4(), 'EMAIL_VERIFIED', 'Email address verified'),
-      (uuid_generate_v4(), 'LOGIN_ATTEMPT', 'User login attempt'),
-      (uuid_generate_v4(), 'LOGIN_SUCCESS', 'Successful user login'),
-      (uuid_generate_v4(), 'LOGIN_FAILED', 'Failed user login'),
-      (uuid_generate_v4(), 'PASSWORD_RESET_REQUESTED', 'Password reset requested'),
-      (uuid_generate_v4(), 'PASSWORD_RESET_COMPLETED', 'Password reset completed'),
-      (uuid_generate_v4(), 'USER_ROLE_ASSIGNED', 'User role assigned'),
-      (uuid_generate_v4(), 'USER_STATUS_CHANGED', 'User status changed'),
-      (uuid_generate_v4(), 'PROFILE_UPDATED', 'User profile updated')
-    `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
