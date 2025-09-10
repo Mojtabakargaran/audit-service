@@ -78,12 +78,29 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
     const userQueue = 'audit-user-events';
     await this.channel.assertQueue(userQueue, { durable: true });
     await this.channel.bindQueue(userQueue, 'user-events', 'user.created');
+    await this.channel.bindQueue(userQueue, 'user-events', 'email.verified');
+    await this.channel.bindQueue(userQueue, 'user-events', 'email.verification.failed');
 
     await this.channel.consume(userQueue, async (message: any) => {
       if (message) {
         try {
           const event = JSON.parse(message.content.toString());
-          await this.handleUserCreatedEvent(event);
+          
+          // Route to appropriate handler based on event type
+          switch (event.eventType) {
+            case 'user.created':
+              await this.handleUserCreatedEvent(event);
+              break;
+            case 'email.verified':
+              await this.handleEmailVerifiedEvent(event);
+              break;
+            case 'email.verification.failed':
+              await this.handleEmailVerificationFailedEvent(event);
+              break;
+            default:
+              console.warn(`Unknown user event type: ${event.eventType}`);
+          }
+          
           this.channel?.ack(message);
         } catch (error) {
           console.error('Error processing user event:', error);
@@ -202,6 +219,66 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
       console.log('Email verification audit log created successfully');
     } catch (error) {
       console.error('Failed to create email verification audit log:', error);
+    }
+  }
+
+  private async handleEmailVerifiedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing email.verified event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'email_verified',
+        entityType: 'user',
+        entityId: event.data.userId,
+        ipAddress: event.data.ipAddress || '127.0.0.1',
+        userAgent: 'System',
+        requestData: {
+          email: event.data.email,
+          verificationToken: event.data.verificationToken,
+          verifiedAt: event.data.verifiedAt,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          success: true,
+        },
+      });
+
+      console.log('Email verified audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create email verified audit log:', error);
+    }
+  }
+
+  private async handleEmailVerificationFailedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing email.verification.failed event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'email_verification_failed',
+        entityType: 'user',
+        entityId: event.data.userId,
+        ipAddress: event.data.ipAddress || '127.0.0.1',
+        userAgent: 'System',
+        requestData: {
+          email: event.data.email,
+          verificationToken: event.data.verificationToken,
+          failureReason: event.data.failureReason,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          success: true,
+        },
+      });
+
+      console.log('Email verification failed audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create email verification failed audit log:', error);
     }
   }
 
