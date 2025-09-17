@@ -80,6 +80,10 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
     await this.channel.bindQueue(userQueue, 'user-events', 'user.created');
     await this.channel.bindQueue(userQueue, 'user-events', 'email.verified');
     await this.channel.bindQueue(userQueue, 'user-events', 'email.verification.failed');
+    await this.channel.bindQueue(userQueue, 'user-events', 'user.login.success');
+    await this.channel.bindQueue(userQueue, 'user-events', 'user.login.failed');
+    await this.channel.bindQueue(userQueue, 'user-events', 'user.account.locked');
+    await this.channel.bindQueue(userQueue, 'user-events', 'user.account.unlocked');
 
     await this.channel.consume(userQueue, async (message: any) => {
       if (message) {
@@ -96,6 +100,18 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
               break;
             case 'email.verification.failed':
               await this.handleEmailVerificationFailedEvent(event);
+              break;
+            case 'user.login.success':
+              await this.handleUserLoginSuccessEvent(event);
+              break;
+            case 'user.login.failed':
+              await this.handleUserLoginFailedEvent(event);
+              break;
+            case 'user.account.locked':
+              await this.handleUserAccountLockedEvent(event);
+              break;
+            case 'user.account.unlocked':
+              await this.handleUserAccountUnlockedEvent(event);
               break;
             default:
               console.warn(`Unknown user event type: ${event.eventType}`);
@@ -307,6 +323,123 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       console.error(`Failed to set up consumer for ${exchange}/${queue}:`, error);
       throw error;
+    }
+  }
+
+  private async handleUserLoginSuccessEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing user.login.success event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'login_success',
+        entityType: 'user',
+        entityId: event.data.userId,
+        ipAddress: event.data.ipAddress,
+        userAgent: event.data.userAgent,
+        requestData: {
+          email: event.data.email,
+          preferredLanguage: event.data.preferredLanguage,
+        },
+        responseData: {
+          eventId: event.eventId,
+          loginTimestamp: event.data.loginTimestamp,
+          success: true,
+        },
+      });
+
+      console.log('User login success audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create user login success audit log:', error);
+    }
+  }
+
+  private async handleUserLoginFailedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing user.login.failed event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId || null,
+        userId: event.data.userId || null,
+        actionName: 'login_failed_invalid_credentials',
+        entityType: 'user',
+        entityId: event.data.userId || null,
+        ipAddress: event.data.ipAddress,
+        userAgent: event.data.userAgent,
+        requestData: {
+          userIdOrEmail: event.data.userIdOrEmail,
+          failureReason: event.data.failureReason,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          success: false,
+        },
+      });
+
+      console.log('User login failed audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create user login failed audit log:', error);
+    }
+  }
+
+  private async handleUserAccountLockedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing user.account.locked event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'account_locked',
+        entityType: 'user',
+        entityId: event.data.userId,
+        ipAddress: event.data.ipAddress,
+        userAgent: event.data.userAgent,
+        requestData: {
+          email: event.data.email,
+          lockoutReason: event.data.lockoutReason,
+          lockedUntil: event.data.lockedUntil,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          success: true,
+        },
+      });
+
+      console.log('User account locked audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create user account locked audit log:', error);
+    }
+  }
+
+  private async handleUserAccountUnlockedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing user.account.unlocked event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'account_unlocked',
+        entityType: 'user',
+        entityId: event.data.userId,
+        ipAddress: '127.0.0.1', // System event
+        userAgent: 'System',
+        requestData: {
+          email: event.data.email,
+          unlockReason: event.data.unlockReason,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          success: true,
+        },
+      });
+
+      console.log('User account unlocked audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create user account unlocked audit log:', error);
     }
   }
 }
