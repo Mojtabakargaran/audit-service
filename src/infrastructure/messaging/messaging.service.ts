@@ -359,17 +359,37 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
     try {
       console.log('Processing user.login.failed event:', event.eventId);
       
+      // Map failure reason to correct action name based on use case specification
+      let actionName = 'login_failed_invalid_credentials'; // default
+      switch (event.data.failureReason) {
+        case 'invalid_credentials':
+          actionName = 'login_failed_invalid_credentials';
+          break;
+        case 'account_locked':
+          actionName = 'login_failed_account_locked';
+          break;
+        case 'account_not_verified':
+          actionName = 'login_failed_account_inactive';
+          break;
+        case 'rate_limit_exceeded':
+          actionName = 'login_failed_rate_limit';
+          break;
+        default:
+          actionName = 'login_failed_invalid_credentials';
+      }
+      
       await this.auditService.createAuditLog({
-        tenantId: event.data.tenantId || null,
+        tenantId: event.data.tenantId || null, // Allow null for system-level events
         userId: event.data.userId || null,
-        actionName: 'login_failed_invalid_credentials',
+        actionName: actionName,
         entityType: 'user',
         entityId: event.data.userId || null,
         ipAddress: event.data.ipAddress,
         userAgent: event.data.userAgent,
         requestData: {
-          userIdOrEmail: event.data.userIdOrEmail,
+          email: event.data.email,
           failureReason: event.data.failureReason,
+          attemptedAt: event.data.attemptedAt,
         },
         responseData: {
           eventId: event.eventId,

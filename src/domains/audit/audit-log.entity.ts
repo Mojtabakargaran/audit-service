@@ -6,8 +6,8 @@ export class AuditLog {
   @PrimaryGeneratedColumn('uuid', { name: 'audit_log_id' })
   auditLogId: string;
 
-  @Column({ name: 'tenant_id', type: 'uuid' })
-  tenantId: string;
+  @Column({ name: 'tenant_id', type: 'uuid', nullable: true })
+  tenantId: string | null;
 
   @Column({ name: 'user_id', type: 'uuid', nullable: true })
   userId: string | null;

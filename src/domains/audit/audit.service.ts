@@ -6,7 +6,7 @@ import { AuditLog } from './audit-log.entity';
 import { AuditActionType } from './audit-action-type.entity';
 
 interface AuditLogData {
-  tenantId: string;
+  tenantId: string | null;
   userId?: string;
   actionName: string;
   entityType: string;
