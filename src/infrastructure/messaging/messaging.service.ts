@@ -84,6 +84,11 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
     await this.channel.bindQueue(userQueue, 'user-events', 'user.login.failed');
     await this.channel.bindQueue(userQueue, 'user-events', 'user.account.locked');
     await this.channel.bindQueue(userQueue, 'user-events', 'user.account.unlocked');
+    // Profile completion events
+    await this.channel.bindQueue(userQueue, 'user-events', 'profile.completion.started');
+    await this.channel.bindQueue(userQueue, 'user-events', 'profile.completed');
+    await this.channel.bindQueue(userQueue, 'user-events', 'profile.photo.uploaded');
+    await this.channel.bindQueue(userQueue, 'user-events', 'profile.completion.failed');
 
     await this.channel.consume(userQueue, async (message: any) => {
       if (message) {
@@ -112,6 +117,18 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
               break;
             case 'user.account.unlocked':
               await this.handleUserAccountUnlockedEvent(event);
+              break;
+            case 'profile.completion.started':
+              await this.handleProfileCompletionStartedEvent(event);
+              break;
+            case 'profile.completed':
+              await this.handleProfileCompletedEvent(event);
+              break;
+            case 'profile.photo.uploaded':
+              await this.handleProfilePhotoUploadedEvent(event);
+              break;
+            case 'profile.completion.failed':
+              await this.handleProfileCompletionFailedEvent(event);
               break;
             default:
               console.warn(`Unknown user event type: ${event.eventType}`);
@@ -460,6 +477,131 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
       console.log('User account unlocked audit log created successfully');
     } catch (error) {
       console.error('Failed to create user account unlocked audit log:', error);
+    }
+  }
+
+  private async handleProfileCompletionStartedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing profile.completion.started event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'profile_completion_started',
+        entityType: 'user',
+        entityId: event.data.userId,
+        ipAddress: event.data.ipAddress,
+        userAgent: event.data.userAgent,
+        requestData: {
+          email: event.data.email,
+          fullName: event.data.fullName,
+          startedAt: event.data.startedAt,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          success: true,
+        },
+      });
+
+      console.log('Profile completion started audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create profile completion started audit log:', error);
+    }
+  }
+
+  private async handleProfileCompletedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing profile.completed event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'profile_completed',
+        entityType: 'user',
+        entityId: event.data.userId,
+        ipAddress: event.data.ipAddress,
+        userAgent: event.data.userAgent,
+        requestData: {
+          email: event.data.email,
+          fullName: event.data.fullName,
+          profileData: event.data.profileData,
+          completedAt: event.data.completedAt,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          success: true,
+        },
+      });
+
+      console.log('Profile completed audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create profile completed audit log:', error);
+    }
+  }
+
+  private async handleProfilePhotoUploadedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing profile.photo.uploaded event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'profile_photo_uploaded',
+        entityType: 'user',
+        entityId: event.data.userId,
+        ipAddress: event.data.ipAddress,
+        userAgent: event.data.userAgent,
+        requestData: {
+          email: event.data.email,
+          photoUrl: event.data.photoUrl,
+          fileSize: event.data.fileSize,
+          fileType: event.data.fileType,
+          uploadedAt: event.data.uploadedAt,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          success: true,
+        },
+      });
+
+      console.log('Profile photo uploaded audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create profile photo uploaded audit log:', error);
+    }
+  }
+
+  private async handleProfileCompletionFailedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing profile.completion.failed event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'profile_completion_failed',
+        entityType: 'user',
+        entityId: event.data.userId,
+        ipAddress: event.data.ipAddress,
+        userAgent: event.data.userAgent,
+        requestData: {
+          email: event.data.email,
+          errorCode: event.data.errorCode,
+          errorMessage: event.data.errorMessage,
+          validationErrors: event.data.validationErrors,
+          failedAt: event.data.failedAt,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          success: false,
+        },
+      });
+
+      console.log('Profile completion failed audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create profile completion failed audit log:', error);
     }
   }
 }
