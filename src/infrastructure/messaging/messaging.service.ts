@@ -26,6 +26,7 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
       await this.channel.assertExchange('user-events', 'topic', { durable: true });
       await this.channel.assertExchange('notification-events', 'topic', { durable: true });
       await this.channel.assertExchange('institutional-events', 'topic', { durable: true });
+      await this.channel.assertExchange('operational-events', 'topic', { durable: true });
 
       // Set up event consumers for audit logging
       await this.setupEventConsumers();
@@ -90,6 +91,9 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
     await this.channel.bindQueue(userQueue, 'user-events', 'profile.completed');
     await this.channel.bindQueue(userQueue, 'user-events', 'profile.photo.uploaded');
     await this.channel.bindQueue(userQueue, 'user-events', 'profile.completion.failed');
+    // Dashboard events
+    await this.channel.bindQueue(userQueue, 'user-events', 'dashboard.accessed');
+    await this.channel.bindQueue(userQueue, 'user-events', 'dashboard.preferences.updated');
 
     await this.channel.consume(userQueue, async (message: any) => {
       if (message) {
@@ -130,6 +134,12 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
               break;
             case 'profile.completion.failed':
               await this.handleProfileCompletionFailedEvent(event);
+              break;
+            case 'dashboard.accessed':
+              await this.handleDashboardAccessedEvent(event);
+              break;
+            case 'dashboard.preferences.updated':
+              await this.handleDashboardPreferencesUpdatedEvent(event);
               break;
             default:
               console.warn(`Unknown user event type: ${event.eventType}`);
@@ -191,6 +201,41 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
           this.channel?.ack(message);
         } catch (error) {
           console.error('Error processing institutional event:', error);
+          this.channel?.nack(message, false, false); // Don't requeue on error
+        }
+      }
+    });
+
+    // Consumer for operational events
+    const operationalQueue = 'audit-operational-events';
+    await this.channel.assertQueue(operationalQueue, { durable: true });
+    await this.channel.bindQueue(operationalQueue, 'operational-events', 'operational.parameters.configuration.started');
+    await this.channel.bindQueue(operationalQueue, 'operational-events', 'operational.parameters.configured');
+    await this.channel.bindQueue(operationalQueue, 'operational-events', 'operational.parameters.configuration.failed');
+
+    await this.channel.consume(operationalQueue, async (message: any) => {
+      if (message) {
+        try {
+          const event = JSON.parse(message.content.toString());
+          
+          // Route to appropriate handler based on event type
+          switch (event.eventType) {
+            case 'operational.parameters.configuration.started':
+              await this.handleOperationalParametersStartedEvent(event);
+              break;
+            case 'operational.parameters.configured':
+              await this.handleOperationalParametersConfiguredEvent(event);
+              break;
+            case 'operational.parameters.configuration.failed':
+              await this.handleOperationalParametersFailedEvent(event);
+              break;
+            default:
+              console.warn(`Unknown operational event type: ${event.eventType}`);
+          }
+          
+          this.channel?.ack(message);
+        } catch (error) {
+          console.error('Error processing operational event:', error);
           this.channel?.nack(message, false, false); // Don't requeue on error
         }
       }
@@ -730,6 +775,173 @@ export class MessagingService implements OnModuleInit, OnModuleDestroy {
       console.log('Institutional profile completion failed audit log created successfully');
     } catch (error) {
       console.error('Failed to create institutional profile completion failed audit log:', error);
+    }
+  }
+
+  private async handleOperationalParametersStartedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing operational.parameters.configuration.started event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'operational_parameters_configuration_started',
+        entityType: 'operational_parameters',
+        entityId: undefined, // Process started, no entity yet
+        ipAddress: '127.0.0.1', // Default for user-initiated system events
+        userAgent: 'Web Application',
+        requestData: {
+          tenantId: event.data.tenantId,
+          userId: event.data.userId,
+          startedAt: event.data.startedAt,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          success: true,
+        },
+      });
+
+      console.log('Operational parameters configuration started audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create operational parameters configuration started audit log:', error);
+    }
+  }
+
+  private async handleOperationalParametersConfiguredEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing operational.parameters.configured event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'operational_parameters_configured',
+        entityType: 'operational_parameters',
+        entityId: event.data.operationalParametersId,
+        ipAddress: '127.0.0.1', // Default for user-initiated system events
+        userAgent: 'Web Application',
+        requestData: {
+          tenantId: event.data.tenantId,
+          userId: event.data.userId,
+          timezone: event.data.timezone,
+          fiscalYearStartMonth: event.data.fiscalYearStartMonth,
+          defaultCurrency: event.data.defaultCurrency,
+          holidaysCount: event.data.holidaysCount,
+          vacationPeriodsCount: event.data.vacationPeriodsCount,
+          visitorHoursCount: event.data.visitorHoursCount,
+          staffRatiosCount: event.data.staffRatiosCount,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          operationalParametersId: event.data.operationalParametersId,
+          configuredAt: event.data.configuredAt,
+          success: true,
+        },
+      });
+
+      console.log('Operational parameters configured audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create operational parameters configured audit log:', error);
+    }
+  }
+
+  private async handleOperationalParametersFailedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing operational.parameters.configuration.failed event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'operational_parameters_configuration_failed',
+        entityType: 'operational_parameters',
+        entityId: undefined, // Configuration failed, no entity created
+        ipAddress: '127.0.0.1', // Default for user-initiated system events
+        userAgent: 'Web Application',
+        requestData: {
+          tenantId: event.data.tenantId,
+          userId: event.data.userId,
+          errorCode: event.data.errorCode,
+          errorMessage: event.data.errorMessage,
+          validationErrors: event.data.validationErrors,
+          failedAt: event.data.failedAt,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          success: false,
+        },
+      });
+
+      console.log('Operational parameters configuration failed audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create operational parameters configuration failed audit log:', error);
+    }
+  }
+
+  // Dashboard event handlers
+  private async handleDashboardAccessedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing dashboard.accessed event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'dashboard_accessed',
+        entityType: 'dashboard',
+        entityId: event.data.userId, // Use userId as entity identifier for dashboard access
+        ipAddress: event.data.ipAddress || '127.0.0.1',
+        userAgent: event.data.userAgent || 'Web Application',
+        requestData: {
+          tenantId: event.data.tenantId,
+          userId: event.data.userId,
+          hospitalName: event.data.hospitalName,
+          roleType: event.data.roleType,
+          accessedAt: event.data.accessedAt,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          sessionDuration: event.data.sessionDuration,
+          success: true,
+        },
+      });
+
+      console.log('Dashboard accessed audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create dashboard accessed audit log:', error);
+    }
+  }
+
+  private async handleDashboardPreferencesUpdatedEvent(event: any): Promise<void> {
+    try {
+      console.log('Processing dashboard.preferences.updated event:', event.eventId);
+      
+      await this.auditService.createAuditLog({
+        tenantId: event.data.tenantId,
+        userId: event.data.userId,
+        actionName: 'dashboard_preferences_updated',
+        entityType: 'dashboard_preferences',
+        entityId: event.data.dashboardPreferencesId,
+        ipAddress: event.data.ipAddress || '127.0.0.1',
+        userAgent: event.data.userAgent || 'Web Application',
+        requestData: {
+          tenantId: event.data.tenantId,
+          userId: event.data.userId,
+          widgetLayout: event.data.widgetLayout,
+          updatedAt: event.data.updatedAt,
+        },
+        responseData: {
+          eventId: event.eventId,
+          timestamp: event.timestamp,
+          dashboardPreferencesId: event.data.dashboardPreferencesId,
+          success: true,
+        },
+      });
+
+      console.log('Dashboard preferences updated audit log created successfully');
+    } catch (error) {
+      console.error('Failed to create dashboard preferences updated audit log:', error);
     }
   }
 }
